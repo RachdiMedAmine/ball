@@ -1,62 +1,42 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
 using System.Collections;
 
 public class PlayerController : MonoBehaviour
 {
-
-    // Create public variables for player speed, and for the Text UI game objects
+    // Movement settings
     public float speed = 10f;
     public float maxSpeed = 15f;
-    public Text countText;
-    public Text winText;
-    public Text loseText;
-    public GameObject restartButton;
-
-    // Set the target score needed to win
-    public int scoreToWin = 12;
 
     // Fall detection
-    public float fallThreshold = -5f; // Y position below which player loses
+    public float fallThreshold = -5f;
 
-    // Create private references to the rigidbody component on the player, and the count of pick up objects picked up so far
+    // Private references
     private Rigidbody rb;
-    private int count;
-    private bool gameOver = false;
+    private bool canMove = true;
 
-    // At the start of the game..
     void Start()
     {
-        // Assign the Rigidbody component to our private rb variable
+        // Assign the Rigidbody component
         rb = GetComponent<Rigidbody>();
 
         // Reduce drag for more responsive movement
         rb.drag = 0.5f;
         rb.angularDrag = 0.5f;
-
-        // Set the count to zero 
-        count = 0;
-
-        // Run the SetCountText function to update the UI (see below)
-        SetCountText();
-
-        // Set the text property of our Win Text UI to an empty string, making the 'You Win' (game over message) blank
-        winText.text = "";
-
-        // Set the lose text to empty and hide restart button
-        if (loseText != null)
-            loseText.text = "";
-
-        if (restartButton != null)
-            restartButton.SetActive(false);
     }
 
-    // Each physics step..
     void FixedUpdate()
     {
-        // Don't allow movement if game is over
-        if (gameOver)
+        // Check if game is over
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver())
+        {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            return;
+        }
+
+        // Don't allow movement if disabled
+        if (!canMove)
             return;
 
         // Check if player fell off the map
@@ -66,11 +46,11 @@ public class PlayerController : MonoBehaviour
             return;
         }
 
-        // Set some local float variables equal to the value of our Horizontal and Vertical Inputs
+        // Get input
         float moveHorizontal = Input.GetAxis("Horizontal");
         float moveVertical = Input.GetAxis("Vertical");
 
-        // Create a Vector3 variable, and assign X and Z to feature our horizontal and vertical float variables above
+        // Create movement vector
         Vector3 movement = new Vector3(moveHorizontal, 0.0f, moveVertical);
 
         // Apply force for responsive movement
@@ -85,65 +65,34 @@ public class PlayerController : MonoBehaviour
         }
     }
 
-    // When this game object intersects a collider with 'is trigger' checked, 
-    // store a reference to that collider in a variable named 'other'..
     void OnTriggerEnter(Collider other)
     {
-        // ..and if the game object we intersect has the tag 'Pick Up' assigned to it..
+        // Check if we hit a pick up
         if (other.gameObject.CompareTag("Pick Up"))
         {
-            // Make the other game object (the pick up) inactive, to make it disappear
+            // Deactivate the pick up
             other.gameObject.SetActive(false);
 
-            // Add one to the score variable 'count'
-            count = count + 1;
-
-            // Run the 'SetCountText()' function (see below)
-            SetCountText();
+            // Notify the GameManager
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.CollectCoin();
+            }
         }
     }
 
-    // Create a standalone function that can update the 'countText' UI and check if the required amount to win has been achieved
-    void SetCountText()
-    {
-        // Update the text field of our 'countText' variable to show current score and target
-        countText.text = "Count: " + count.ToString() + " / " + scoreToWin.ToString();
-
-        // Check if our 'count' has reached or exceeded the score needed to win
-        if (count >= scoreToWin)
-        {
-            // Set the text value of our 'winText'
-            winText.text = "You Win!";
-            gameOver = true;
-
-            // Show restart button
-            if (restartButton != null)
-                restartButton.SetActive(true);
-        }
-    }
-
-    // Public function that can be called when the enemy catches the player
     public void GameOver()
     {
-        gameOver = true;
+        canMove = false;
 
         // Stop the player's movement
         rb.velocity = Vector3.zero;
         rb.angularVelocity = Vector3.zero;
 
-        // Display lose message
-        if (loseText != null)
-            loseText.text = "You Lose!";
-
-        // Show restart button
-        if (restartButton != null)
-            restartButton.SetActive(true);
-    }
-
-    // Function to restart the game (called by the restart button)
-    public void RestartGame()
-    {
-        // Reload the current scene
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        // Notify GameManager
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.GameOver();
+        }
     }
 }

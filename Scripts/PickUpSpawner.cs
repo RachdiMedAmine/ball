@@ -9,9 +9,9 @@ public class PickUpSpawner : MonoBehaviour
     // Number of pick ups to spawn
     public int numberOfPickUps = 12;
 
-    // Define the spawn area boundaries (adjust these to match your arena size)
-    public float spawnAreaWidth = 18f;
-    public float spawnAreaDepth = 18f;
+    // Define the spawn area boundaries (adjusted for scale 7x7 map = ~60 units)
+    public float spawnAreaWidth = 60f;
+    public float spawnAreaDepth = 60f;
     public float spawnHeight = 0.5f;
 
     // Minimum distance between pick ups
