@@ -14,20 +14,32 @@ public class PlayerController : MonoBehaviour
     // Private references
     private Rigidbody rb;
     private bool canMove = true;
+    private bool hasFallen = false;
 
     void Start()
     {
         // Assign the Rigidbody component
         rb = GetComponent<Rigidbody>();
 
+        if (rb == null)
+        {
+            Debug.LogError("Rigidbody component missing on Player!");
+            return;
+        }
+
         // Reduce drag for more responsive movement
         rb.drag = 0.5f;
         rb.angularDrag = 0.5f;
+
+        Debug.Log("Player initialized at position: " + transform.position);
     }
 
     void FixedUpdate()
     {
-        // Check if game is over
+        if (rb == null)
+            return;
+
+        // Check if game is over via GameManager
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver())
         {
             rb.velocity = Vector3.zero;
@@ -37,11 +49,17 @@ public class PlayerController : MonoBehaviour
 
         // Don't allow movement if disabled
         if (!canMove)
-            return;
-
-        // Check if player fell off the map
-        if (transform.position.y < fallThreshold)
         {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            return;
+        }
+
+        // Check if player fell off the map (only trigger once)
+        if (!hasFallen && transform.position.y < fallThreshold)
+        {
+            Debug.Log("Player fell off the map at Y position: " + transform.position.y);
+            hasFallen = true;
             GameOver();
             return;
         }
@@ -73,26 +91,44 @@ public class PlayerController : MonoBehaviour
             // Deactivate the pick up
             other.gameObject.SetActive(false);
 
+            Debug.Log("Player collected a pickup!");
+
             // Notify the GameManager
             if (GameManager.Instance != null)
             {
                 GameManager.Instance.CollectCoin();
+            }
+            else
+            {
+                Debug.LogError("GameManager.Instance is null! Cannot collect coin.");
             }
         }
     }
 
     public void GameOver()
     {
+        if (!canMove) // Already game over
+            return;
+
         canMove = false;
 
+        Debug.Log("Player GameOver called");
+
         // Stop the player's movement
-        rb.velocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
 
         // Notify GameManager
         if (GameManager.Instance != null)
         {
             GameManager.Instance.GameOver();
+        }
+        else
+        {
+            Debug.LogError("GameManager.Instance is null! Cannot trigger game over.");
         }
     }
 }

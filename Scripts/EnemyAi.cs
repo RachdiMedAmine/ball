@@ -18,11 +18,6 @@ public class EnemyAI : MonoBehaviour
     public float avoidanceForce = 15f;
     public LayerMask obstacleLayer;
 
-    // Spawn area settings
-    public float spawnAreaWidth = 60f;
-    public float spawnAreaDepth = 60f;
-    public float spawnHeight = 0.5f;
-
     // Fall detection
     public float fallThreshold = -5f;
 
@@ -31,35 +26,54 @@ public class EnemyAI : MonoBehaviour
 
     private Rigidbody rb;
     private bool hasWon = false;
+    private bool isInitialized = false;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
 
+        if (rb == null)
+        {
+            Debug.LogError("Rigidbody component missing on Enemy!");
+            return;
+        }
+
         // Set up physics for smooth movement
         rb.drag = 0.5f;
         rb.angularDrag = 0.5f;
+    }
 
+    void Start()
+    {
         // If player reference is not set, try to find it
         if (player == null)
         {
             player = GameObject.FindGameObjectWithTag("Player");
+
+            if (player == null)
+            {
+                Debug.LogError("Player not found! Enemy cannot function.");
+            }
         }
 
-        // Spawn at random position immediately
-        SpawnAtRandomPosition();
+        isInitialized = true;
+        Debug.Log("Enemy AI initialized at position: " + transform.position);
     }
 
     void FixedUpdate()
     {
+        if (!isInitialized || rb == null)
+            return;
+
         // Check if enemy fell off the map
         if (transform.position.y < fallThreshold)
         {
-            RespawnEnemy();
+            Debug.Log("Enemy fell off map at position: " + transform.position);
+            Destroy(gameObject); // Destroy instead of respawn since GameManager spawns them
             return;
         }
 
-        // Don't move if game is over
+        // Don't move if game is over or player is missing
         if (hasWon || player == null)
             return;
 
@@ -92,77 +106,21 @@ public class EnemyAI : MonoBehaviour
         }
     }
 
-    void SpawnAtRandomPosition()
-    {
-        int maxAttempts = 100;
-
-        while (maxAttempts > 0)
-        {
-            // Generate random position within the arena
-            Vector3 randomPosition = new Vector3(
-                Random.Range(-spawnAreaWidth / 2, spawnAreaWidth / 2),
-                spawnHeight,
-                Random.Range(-spawnAreaDepth / 2, spawnAreaDepth / 2)
-            );
-
-            // Check if spawn position is far enough from player
-            if (player != null)
-            {
-                float distanceToPlayer = Vector3.Distance(randomPosition, player.transform.position);
-                if (distanceToPlayer >= minSpawnDistanceFromPlayer)
-                {
-                    // Valid spawn position found
-                    transform.position = randomPosition;
-
-                    // Reset velocity
-                    rb.velocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;
-
-                    return;
-                }
-            }
-            else
-            {
-                // If no player reference, spawn anyway
-                transform.position = randomPosition;
-                rb.velocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-                return;
-            }
-
-            maxAttempts--;
-        }
-
-        // If we couldn't find a valid position, spawn anyway at last random position
-        Debug.LogWarning("Could not find spawn position far from player. Spawning at random position anyway.");
-        Vector3 fallbackPosition = new Vector3(
-            Random.Range(-spawnAreaWidth / 2, spawnAreaWidth / 2),
-            spawnHeight,
-            Random.Range(-spawnAreaDepth / 2, spawnAreaDepth / 2)
-        );
-        transform.position = fallbackPosition;
-        rb.velocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
-    }
-
-    void RespawnEnemy()
-    {
-        Debug.Log("Enemy fell off map. Respawning...");
-        SpawnAtRandomPosition();
-    }
-
     Vector3 DetectAndAvoidObstacles()
     {
         Vector3 avoidance = Vector3.zero;
 
+        if (player == null)
+            return avoidance;
+
         // Cast rays in multiple directions to detect obstacles
         Vector3[] rayDirections = new Vector3[]
         {
-            transform.forward,                          // Front
-            Quaternion.Euler(0, 45, 0) * transform.forward,   // Front-right
-            Quaternion.Euler(0, -45, 0) * transform.forward,  // Front-left
-            Quaternion.Euler(0, 90, 0) * transform.forward,   // Right
-            Quaternion.Euler(0, -90, 0) * transform.forward,  // Left
+            transform.forward,
+            Quaternion.Euler(0, 45, 0) * transform.forward,
+            Quaternion.Euler(0, -45, 0) * transform.forward,
+            Quaternion.Euler(0, 90, 0) * transform.forward,
+            Quaternion.Euler(0, -90, 0) * transform.forward,
         };
 
         // Direction to player for reference
@@ -211,13 +169,22 @@ public class EnemyAI : MonoBehaviour
 
     void CatchPlayer()
     {
+        if (hasWon)
+            return;
+
         hasWon = true;
+
+        Debug.Log("Enemy caught the player!");
 
         // Find the player controller and trigger game over
         PlayerController playerController = player.GetComponent<PlayerController>();
         if (playerController != null)
         {
             playerController.GameOver();
+        }
+        else
+        {
+            Debug.LogError("PlayerController not found on player object!");
         }
     }
 }

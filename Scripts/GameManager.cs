@@ -1,30 +1,46 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using UnityEngine.SceneManagement;
 using System.Collections;
 
 public class GameManager : MonoBehaviour
 {
     // Singleton instance
-    public static GameManager Instance;
+    public static GameManager Instance { get; private set; }
 
-    // UI References
-    public Text levelText;
-    public Text objectiveText;
-    public Text timerText;
-    public Text winText;
-    public Text loseText;
+    // UI References - Just drag the GameObjects here!
+    [Header("Drag the GameObject (not the component) for each UI element")]
+    public GameObject levelTextObject;
+    public GameObject objectiveTextObject;
+    public GameObject timerTextObject;
+    public GameObject winTextObject;
+    public GameObject loseTextObject;
     public GameObject restartButton;
 
     // Enemy prefab and spawn settings
+    [Header("Enemy Settings")]
     public GameObject enemyPrefab;
     public float spawnAreaWidth = 60f;
     public float spawnAreaDepth = 60f;
     public float spawnHeight = 0.5f;
     public float minSpawnDistanceFromPlayer = 10f;
 
+    // Internal text component references (auto-detected)
+    private Text levelText;
+    private Text objectiveText;
+    private Text timerText;
+    private Text winText;
+    private Text loseText;
+
+    private TextMeshProUGUI levelTextTMP;
+    private TextMeshProUGUI objectiveTextTMP;
+    private TextMeshProUGUI timerTextTMP;
+    private TextMeshProUGUI winTextTMP;
+    private TextMeshProUGUI loseTextTMP;
+
     // Player reference
-    public GameObject player;
+    private GameObject player;
 
     // Level tracking
     private int currentLevel = 1;
@@ -46,35 +62,121 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
-        // Singleton pattern
-        if (Instance == null)
-        {
-            Instance = this;
-        }
-        else
+        // Singleton pattern - destroy duplicates
+        if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
             return;
         }
+
+        Instance = this;
     }
 
     void Start()
     {
-        // Find player if not assigned
+        // Find player
+        player = GameObject.FindGameObjectWithTag("Player");
+
         if (player == null)
         {
-            player = GameObject.FindGameObjectWithTag("Player");
+            Debug.LogError("Player not found! Make sure player has 'Player' tag.");
         }
 
-        // Initialize UI
-        UpdateLevelUI();
-        winText.text = "";
-        loseText.text = "";
-        timerText.text = "";
-        restartButton.SetActive(false);
+        // Auto-detect text components from GameObjects
+        DetectTextComponents();
 
-        // Start Level 1
-        StartLevel1();
+        // Validate references
+        ValidateReferences();
+
+        // Initialize game state
+        InitializeGame();
+    }
+
+    void DetectTextComponents()
+    {
+        // Try to get Text components (legacy)
+        if (levelTextObject != null)
+        {
+            levelText = levelTextObject.GetComponent<Text>();
+            levelTextTMP = levelTextObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (objectiveTextObject != null)
+        {
+            objectiveText = objectiveTextObject.GetComponent<Text>();
+            objectiveTextTMP = objectiveTextObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (timerTextObject != null)
+        {
+            timerText = timerTextObject.GetComponent<Text>();
+            timerTextTMP = timerTextObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (winTextObject != null)
+        {
+            winText = winTextObject.GetComponent<Text>();
+            winTextTMP = winTextObject.GetComponent<TextMeshProUGUI>();
+        }
+
+        if (loseTextObject != null)
+        {
+            loseText = loseTextObject.GetComponent<Text>();
+            loseTextTMP = loseTextObject.GetComponent<TextMeshProUGUI>();
+        }
+    }
+
+    void ValidateReferences()
+    {
+        if (levelTextObject == null) Debug.LogError("Level Text Object not assigned!");
+        if (objectiveTextObject == null) Debug.LogError("Objective Text Object not assigned!");
+        if (timerTextObject == null) Debug.LogError("Timer Text Object not assigned!");
+        if (winTextObject == null) Debug.LogError("Win Text Object not assigned!");
+        if (loseTextObject == null) Debug.LogError("Lose Text Object not assigned!");
+        if (restartButton == null) Debug.LogError("Restart Button not assigned!");
+        if (enemyPrefab == null) Debug.LogError("Enemy Prefab not assigned!");
+    }
+
+    void InitializeGame()
+    {
+        // Reset all game state
+        currentLevel = 1;
+        coinsCollected = 0;
+        isGameOver = false;
+        isSurvivalMode = false;
+        survivalTimer = level3SurvivalTime;
+
+        // Clear enemy references
+        enemy1 = null;
+        enemy2 = null;
+
+        // Initialize UI
+        SetText(levelTextObject, levelText, levelTextTMP, "Level: 1");
+        SetText(objectiveTextObject, objectiveText, objectiveTextTMP, "Collect Coins: 0 / " + level1CoinsRequired);
+        SetText(timerTextObject, timerText, timerTextTMP, "");
+        SetText(winTextObject, winText, winTextTMP, "");
+        SetText(loseTextObject, loseText, loseTextTMP, "");
+
+        if (restartButton != null) restartButton.SetActive(false);
+
+        Debug.Log("Game Initialized - Level 1 Started");
+    }
+
+    // Helper method to set text (works with both Text and TextMeshPro)
+    void SetText(GameObject textObj, Text legacyText, TextMeshProUGUI tmpText, string value)
+    {
+        if (legacyText != null)
+        {
+            legacyText.text = value;
+        }
+        else if (tmpText != null)
+        {
+            tmpText.text = value;
+        }
+        else if (textObj != null)
+        {
+            Debug.LogWarning("No Text or TextMeshPro component found on " + textObj.name);
+        }
     }
 
     void Update()
@@ -83,7 +185,8 @@ public class GameManager : MonoBehaviour
         if (isSurvivalMode && !isGameOver)
         {
             survivalTimer -= Time.deltaTime;
-            timerText.text = "Survive: " + Mathf.Ceil(survivalTimer).ToString() + "s";
+
+            SetText(timerTextObject, timerText, timerTextTMP, "Survive: " + Mathf.CeilToInt(survivalTimer).ToString() + "s");
 
             if (survivalTimer <= 0)
             {
@@ -99,6 +202,8 @@ public class GameManager : MonoBehaviour
             return;
 
         coinsCollected++;
+        Debug.Log("Coin collected! Total: " + coinsCollected);
+
         UpdateLevelUI();
 
         // Check level progression
@@ -112,23 +217,17 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void StartLevel1()
-    {
-        currentLevel = 1;
-        coinsCollected = 0;
-        UpdateLevelUI();
-        Debug.Log("Level 1: Peaceful collection phase started");
-    }
-
     void StartLevel2()
     {
         currentLevel = 2;
+        Debug.Log("=== LEVEL 2 STARTING ===");
+
         UpdateLevelUI();
 
         // Spawn first enemy
-        enemy1 = SpawnEnemy();
+        StartCoroutine(SpawnEnemyWithDelay(1f, true));
 
-        Debug.Log("Level 2: First enemy spawned!");
+        // Show transition message
         StartCoroutine(ShowLevelTransition("Level 2: Enemy Incoming!"));
     }
 
@@ -137,13 +236,34 @@ public class GameManager : MonoBehaviour
         currentLevel = 3;
         isSurvivalMode = true;
         survivalTimer = level3SurvivalTime;
+
+        Debug.Log("=== LEVEL 3 STARTING ===");
+
         UpdateLevelUI();
 
         // Spawn second enemy
-        enemy2 = SpawnEnemy();
+        StartCoroutine(SpawnEnemyWithDelay(1f, false));
 
-        Debug.Log("Level 3: Survival mode activated!");
+        // Show transition message
         StartCoroutine(ShowLevelTransition("Level 3: Survive 60 Seconds!"));
+    }
+
+    IEnumerator SpawnEnemyWithDelay(float delay, bool isFirstEnemy)
+    {
+        yield return new WaitForSeconds(delay);
+
+        GameObject enemy = SpawnEnemy();
+
+        if (isFirstEnemy)
+        {
+            enemy1 = enemy;
+            Debug.Log("First enemy spawned!");
+        }
+        else
+        {
+            enemy2 = enemy;
+            Debug.Log("Second enemy spawned!");
+        }
     }
 
     GameObject SpawnEnemy()
@@ -154,14 +274,27 @@ public class GameManager : MonoBehaviour
             return null;
         }
 
+        if (player == null)
+        {
+            Debug.LogError("Player reference is null! Cannot spawn enemy.");
+            return null;
+        }
+
         Vector3 spawnPosition = GetRandomSpawnPosition();
         GameObject enemy = Instantiate(enemyPrefab, spawnPosition, Quaternion.identity);
 
+        Debug.Log("Enemy spawned at position: " + spawnPosition);
+
         // Set player reference on enemy
         EnemyAI enemyAI = enemy.GetComponent<EnemyAI>();
-        if (enemyAI != null && player != null)
+        if (enemyAI != null)
         {
             enemyAI.player = player;
+            Debug.Log("Enemy AI configured with player reference");
+        }
+        else
+        {
+            Debug.LogError("EnemyAI component not found on spawned enemy!");
         }
 
         return enemy;
@@ -187,50 +320,51 @@ public class GameManager : MonoBehaviour
                     return randomPosition;
                 }
             }
-            else
-            {
-                return randomPosition;
-            }
 
             maxAttempts--;
         }
 
-        return new Vector3(0, spawnHeight, 0);
+        // Fallback position
+        Debug.LogWarning("Could not find ideal spawn position. Using fallback.");
+        return new Vector3(spawnAreaWidth / 3, spawnHeight, spawnAreaDepth / 3);
     }
 
     void UpdateLevelUI()
     {
-        levelText.text = "Level: " + currentLevel;
+        SetText(levelTextObject, levelText, levelTextTMP, "Level: " + currentLevel);
 
         if (currentLevel == 1)
         {
-            objectiveText.text = "Collect Coins: " + coinsCollected + " / " + level1CoinsRequired;
+            SetText(objectiveTextObject, objectiveText, objectiveTextTMP, "Collect Coins: " + coinsCollected + " / " + level1CoinsRequired);
         }
         else if (currentLevel == 2)
         {
-            objectiveText.text = "Collect Coins: " + coinsCollected + " / " + level2CoinsRequired + " (Enemy Active!)";
+            SetText(objectiveTextObject, objectiveText, objectiveTextTMP, "Collect Coins: " + coinsCollected + " / " + level2CoinsRequired + " (Enemy Active!)");
         }
         else if (currentLevel == 3)
         {
-            objectiveText.text = "SURVIVE! (Coins: " + coinsCollected + ")";
+            SetText(objectiveTextObject, objectiveText, objectiveTextTMP, "SURVIVE! (Coins: " + coinsCollected + ")");
         }
     }
 
     IEnumerator ShowLevelTransition(string message)
     {
-        // Store original text
-        string originalObjective = objectiveText.text;
+        if (objectiveTextObject == null)
+            yield break;
 
         // Show transition message
-        objectiveText.text = message;
-        objectiveText.fontSize = 24;
-        objectiveText.color = Color.red;
+        SetText(objectiveTextObject, objectiveText, objectiveTextTMP, message);
+
+        // Change color to red if possible
+        if (objectiveText != null) objectiveText.color = Color.red;
+        if (objectiveTextTMP != null) objectiveTextTMP.color = Color.red;
 
         yield return new WaitForSeconds(3f);
 
-        // Restore normal text
-        objectiveText.fontSize = 18;
-        objectiveText.color = Color.white;
+        // Restore color
+        if (objectiveText != null) objectiveText.color = Color.white;
+        if (objectiveTextTMP != null) objectiveTextTMP.color = Color.white;
+
         UpdateLevelUI();
     }
 
@@ -240,10 +374,18 @@ public class GameManager : MonoBehaviour
             return;
 
         isGameOver = true;
-        loseText.text = "You Lose!";
-        restartButton.SetActive(true);
 
-        Debug.Log("Game Over!");
+        Debug.Log("=== GAME OVER ===");
+
+        SetText(loseTextObject, loseText, loseTextTMP, "You Lose!");
+
+        if (restartButton != null)
+        {
+            restartButton.SetActive(true);
+        }
+
+        // Stop all enemies
+        StopAllEnemies();
     }
 
     void WinGame()
@@ -253,31 +395,75 @@ public class GameManager : MonoBehaviour
 
         isGameOver = true;
         isSurvivalMode = false;
-        winText.text = "You Win! All Levels Complete!";
-        restartButton.SetActive(true);
+
+        Debug.Log("=== VICTORY ===");
+
+        SetText(winTextObject, winText, winTextTMP, "You Win! All Levels Complete!");
+
+        if (restartButton != null)
+        {
+            restartButton.SetActive(true);
+        }
 
         // Stop all enemies
+        StopAllEnemies();
+    }
+
+    void StopAllEnemies()
+    {
         if (enemy1 != null)
         {
             EnemyAI ai1 = enemy1.GetComponent<EnemyAI>();
-            if (ai1 != null) ai1.enabled = false;
+            if (ai1 != null)
+            {
+                ai1.enabled = false;
+                Rigidbody rb1 = enemy1.GetComponent<Rigidbody>();
+                if (rb1 != null)
+                {
+                    rb1.velocity = Vector3.zero;
+                    rb1.angularVelocity = Vector3.zero;
+                }
+            }
         }
+
         if (enemy2 != null)
         {
             EnemyAI ai2 = enemy2.GetComponent<EnemyAI>();
-            if (ai2 != null) ai2.enabled = false;
+            if (ai2 != null)
+            {
+                ai2.enabled = false;
+                Rigidbody rb2 = enemy2.GetComponent<Rigidbody>();
+                if (rb2 != null)
+                {
+                    rb2.velocity = Vector3.zero;
+                    rb2.angularVelocity = Vector3.zero;
+                }
+            }
         }
-
-        Debug.Log("Victory! Player survived all 3 levels!");
     }
 
     public void RestartGame()
     {
+        Debug.Log("Restarting game...");
+
+        // Destroy singleton instance before reloading
+        Instance = null;
+
+        // Reload the scene
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     public bool IsGameOver()
     {
         return isGameOver;
+    }
+
+    void OnDestroy()
+    {
+        // Clear singleton reference when destroyed
+        if (Instance == this)
+        {
+            Instance = null;
+        }
     }
 }
